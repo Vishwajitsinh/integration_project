@@ -59,6 +59,11 @@ class ScientificSolver:
             
         return steps
 
+    def sanitize_output(self, text):
+        """Helper to make output 'human' readable (e.g. ^ instead of **)."""
+        if not text: return ""
+        return text.replace("**", "^")
+
     def process_query(self, query):
         """
         Identify the intent of the query and solve it.
@@ -132,21 +137,21 @@ class ScientificSolver:
         if limits:
             result = integrate(expr, limits)
             # Use str() instead of pretty() to keep it on one line for the GUI text
-            display = f"Definite Integral of {expr}\nfrom {limits[1]} to {limits[2]}:\n\n= {result}\n\n(Approx: {result.evalf()}){steps_text}"
+            display = self.sanitize_output(f"Definite Integral of {expr}\nfrom {limits[1]} to {limits[2]}:\n\n= {result}\n\n(Approx: {result.evalf()}){steps_text}")
             
             # Simple ASCII for handwriting
             handwriting = f"Integral of {expr} from {limits[1]} to {limits[2]}:\n\n{steps_text}\n\n= {result}"
-            handwriting = handwriting.replace("**", "^") # Normalize for renderer
+            handwriting = self.sanitize_output(handwriting) # Normalize for renderer
             
             return {'display': display, 'handwriting': handwriting}
         else:
             result = integrate(expr, self.x)
             # Use str() instead of pretty() to keep it on one line for the GUI text
-            display = f"Indefinite Integral of {expr} dx:\n\n= {result} + C{steps_text}"
+            display = self.sanitize_output(f"Indefinite Integral of {expr} dx:\n\n= {result} + C{steps_text}")
             
             # Simple ASCII for handwriting
             handwriting = f"Integral of {expr} dx:\n\n{steps_text}\n\n= {result} + C"
-            handwriting = handwriting.replace("**", "^") # Normalize for renderer
+            handwriting = self.sanitize_output(handwriting) # Normalize for renderer
             
             return {'display': display, 'handwriting': handwriting}
 
@@ -156,9 +161,9 @@ class ScientificSolver:
         if not expr: return {'display': "Could not understand the function.", 'handwriting': "Parse Error"}
         
         result = diff(expr, self.x)
-        display = f"Derivative of {expr} with respect to x:\n\n= {result}"
+        display = self.sanitize_output(f"Derivative of {expr} with respect to x:\n\n= {result}")
         handwriting = f"Derivative of {expr}:\n\n= {result}"
-        handwriting = handwriting.replace("**", "^")
+        handwriting = self.sanitize_output(handwriting)
         return {'display': display, 'handwriting': handwriting}
 
     def handle_limit(self, query):
@@ -181,9 +186,9 @@ class ScientificSolver:
         if not expr: return {'display': "Could not parse function for limit.", 'handwriting': "Parse Error"}
         
         res = limit(expr, self.x, target_val)
-        display = f"Limit of {expr} as x -> {target_val}:\n\n= {res}"
+        display = self.sanitize_output(f"Limit of {expr} as x -> {target_val}:\n\n= {res}")
         handwriting = f"Limit of {expr} as x -> {target_val}:\n\n= {res}"
-        handwriting = handwriting.replace("**", "^")
+        handwriting = self.sanitize_output(handwriting)
         return {'display': display, 'handwriting': handwriting}
 
     def handle_solve(self, query):
@@ -204,9 +209,9 @@ class ScientificSolver:
         if expr is None: return {'display': "Could not parse equation.", 'handwriting': "Parse Error"}
         
         solution = solve(expr, self.x)
-        display = f"Solution for {expr} = 0:\n\n{solution}"
+        display = self.sanitize_output(f"Solution for {expr} = 0:\n\n{solution}")
         handwriting = f"Solution for {expr} = 0:\n\n{solution}"
-        handwriting = handwriting.replace("**", "^")
+        handwriting = self.sanitize_output(handwriting)
         return {'display': display, 'handwriting': handwriting}
 
     def handle_simplify(self, query):
@@ -224,9 +229,9 @@ class ScientificSolver:
                 return {'display': "Could not understand expression.", 'handwriting': "Error"}
         
         res = simplify(expr)
-        display = f"Simplified form of {expr}:\n\n= {res}"
+        display = self.sanitize_output(f"Simplified form of {expr}:\n\n= {res}")
         handwriting = f"Simplified {expr}:\n\n= {res}"
-        handwriting = handwriting.replace("**", "^")
+        handwriting = self.sanitize_output(handwriting)
         return {'display': display, 'handwriting': handwriting}
 
 if __name__ == "__main__":

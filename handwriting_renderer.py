@@ -4,7 +4,7 @@ import os
 import random
 
 class HandwritingRenderer:
-    def __init__(self, font_path=r"C:\Windows\Fonts\LHANDW.TTF", font_size=20):
+    def __init__(self, font_path=r"C:\Windows\Fonts\Inkfree.ttf", font_size=20):
         self.font_path = font_path
         self.font_size = font_size
         try:
