@@ -90,16 +90,18 @@ class AdvancedSolverApp(ctk.CTk):
         try:
             # 1. Solve
             print(f"Solving: {query}")
-            result_text = self.solver.process_query(query)
+            result = self.solver.process_query(query) # Now returns a DICT
+            
+            display_text = result['display']
+            handwriting_text = result['handwriting']
             
             # 2. Render Handwritting
             print("Rendering handwriting...")
-            # Generate a cleaned filename
             output_image_path = os.path.join(os.getcwd(), "last_solution.png")
-            self.renderer.render_text(result_text, output_image_path)
+            self.renderer.render_text(handwriting_text, output_image_path)
             
             # 3. Update UI
-            self.after(0, lambda: self.update_ui(result_text, output_image_path))
+            self.after(0, lambda: self.update_ui(display_text, output_image_path))
             
         except Exception as e:
             self.after(0, lambda: self.update_ui(f"Error: {str(e)}", None))

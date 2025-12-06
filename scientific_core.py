@@ -1,5 +1,6 @@
 import sympy
 from sympy import symbols, integrate, diff, solve, limit, oo, simplify, Matrix, latex, pretty
+from sympy.integrals.manualintegrate import integral_steps, manualintegrate
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
 
 class ScientificSolver:
@@ -32,29 +33,58 @@ class ScientificSolver:
                 print(f"DEBUG: Parse error on '{expression_str}': {e}")
                 return None
 
+    def format_steps(self, rule):
+        """Recursively formatting the rule tree into strings."""
+        steps = []
+        name = rule.__class__.__name__.replace("Rule", "")
+        
+        # Simple formatting logic
+        if name == "Power":
+            steps.append(f"Apply Power Rule on {rule.integrand}")
+        elif name == "Add":
+            steps.append(f"Split integration (Sum Rule)")
+            for sub in rule.substeps:
+                steps.extend(self.format_steps(sub))
+        elif name == "ConstantTimes":
+            steps.append(f"Factor out constant: {rule.constant}")
+            steps.extend(self.format_steps(rule.substep))
+        elif name == "Parts":
+            steps.append(f"Integration by Parts: u={rule.u}, dv={rule.dv}")
+            steps.extend(self.format_steps(rule.substep)) # recursive part
+        elif name == "U":
+            steps.append(f"U-Substitution: u={rule.u_func}")
+            steps.extend(self.format_steps(rule.substep))
+        else:
+            steps.append(f"Apply {name} Rule on {rule.integrand}")
+            
+        return steps
+
     def process_query(self, query):
         """
         Identify the intent of the query and solve it.
-        Supported keywords: integra, deriv, diff, solve, limit, simplif, matrix, factor
+        Returns a DICTIONARY: {'display': str, 'handwriting': str}
         """
         query = query.lower()
+        result = {}
         
         try:
-            if "integ" in query: # integrate, integration
-                return self.handle_integration(query)
+            if "integ" in query: 
+                result = self.handle_integration(query)
             elif "deriv" in query or "diff" in query:
-                return self.handle_differentiation(query)
+                result = self.handle_differentiation(query)
             elif "lim" in query:
-                return self.handle_limit(query)
+                result = self.handle_limit(query)
             elif "solv" in query or "=" in query:
-                return self.handle_solve(query)
+                result = self.handle_solve(query)
             elif "simp" in query:
-                return self.handle_simplify(query)
+                result = self.handle_simplify(query)
             else:
-                # Default to simplify/evaluate
-                return self.handle_simplify(query)
+                result = self.handle_simplify(query)
+                
+            return result
         except Exception as e:
-            return f"Error processing query: {str(e)}\nPlease try standard math notation."
+            err_msg = f"Error processing query: {str(e)}\nPlease try standard math notation."
+            return {'display': err_msg, 'handwriting': "Error in calculation."}
 
     def extract_func(self, query, keywords):
         # Naive extraction: remove keywords and whitespace, assume rest is math
@@ -88,22 +118,48 @@ class ScientificSolver:
                 pass 
                 
         expr = self.parse_input(func_str)
-        if not expr: return "Could not understand the function."
+        if not expr: return {'display': "Could not understand the function.", 'handwriting': "Parse Error"}
         
+        # Step-by-step for indefinite integration
+        steps_text = ""
+        try:
+            steps = integral_steps(expr, self.x)
+            step_list = self.format_steps(steps)
+            steps_text = "\n\nSteps:\n" + "\n".join([f"{i+1}. {s}" for i, s in enumerate(step_list)])
+        except:
+            steps_text = "\n(Detailed steps not available for this integral)"
+
         if limits:
             result = integrate(expr, limits)
-            return f"Definite Integral of {pretty(expr)}\nfrom {limits[1]} to {limits[2]}:\n\n= {pretty(result)}\n\n(Approx: {result.evalf()})"
+            # Use str() instead of pretty() to keep it on one line for the GUI text
+            display = f"Definite Integral of {expr}\nfrom {limits[1]} to {limits[2]}:\n\n= {result}\n\n(Approx: {result.evalf()}){steps_text}"
+            
+            # Simple ASCII for handwriting
+            handwriting = f"Integral of {expr} from {limits[1]} to {limits[2]}:\n\n{steps_text}\n\n= {result}"
+            handwriting = handwriting.replace("**", "^") # Normalize for renderer
+            
+            return {'display': display, 'handwriting': handwriting}
         else:
             result = integrate(expr, self.x)
-            return f"Indefinite Integral of {pretty(expr)} dx:\n\n= {pretty(result)} + C"
+            # Use str() instead of pretty() to keep it on one line for the GUI text
+            display = f"Indefinite Integral of {expr} dx:\n\n= {result} + C{steps_text}"
+            
+            # Simple ASCII for handwriting
+            handwriting = f"Integral of {expr} dx:\n\n{steps_text}\n\n= {result} + C"
+            handwriting = handwriting.replace("**", "^") # Normalize for renderer
+            
+            return {'display': display, 'handwriting': handwriting}
 
     def handle_differentiation(self, query):
         func_str = self.extract_func(query, ["differentiate", "derivative", "derive", "diff"])
         expr = self.parse_input(func_str)
-        if not expr: return "Could not understand the function."
+        if not expr: return {'display': "Could not understand the function.", 'handwriting': "Parse Error"}
         
         result = diff(expr, self.x)
-        return f"Derivative of {pretty(expr)} with respect to x:\n\n= {pretty(result)}"
+        display = f"Derivative of {expr} with respect to x:\n\n= {result}"
+        handwriting = f"Derivative of {expr}:\n\n= {result}"
+        handwriting = handwriting.replace("**", "^")
+        return {'display': display, 'handwriting': handwriting}
 
     def handle_limit(self, query):
         # Format: limit of f(x) as x -> a
@@ -122,25 +178,36 @@ class ScientificSolver:
         func_str = self.extract_func(query, ["limit", "approaches", "as", "x", "->", val_str])
         expr = self.parse_input(func_str)
         
+        if not expr: return {'display': "Could not parse function for limit.", 'handwriting': "Parse Error"}
+        
         res = limit(expr, self.x, target_val)
-        return f"Limit of {pretty(expr)} as x -> {target_val}:\n\n= {pretty(res)}"
+        display = f"Limit of {expr} as x -> {target_val}:\n\n= {res}"
+        handwriting = f"Limit of {expr} as x -> {target_val}:\n\n= {res}"
+        handwriting = handwriting.replace("**", "^")
+        return {'display': display, 'handwriting': handwriting}
 
     def handle_solve(self, query):
         # solves for x = 0 by default if no = sign
         # But if there is an =, we split
         if "=" in query:
             sides = query.split("=")
-            lhs = self.parse_input(sides[0])
+            # clean the "solve" keyword from lhs if present
+            clean_lhs = self.extract_func(sides[0], ["solve", "equation", "for", "find"])
+            lhs = self.parse_input(clean_lhs)
             rhs = self.parse_input(sides[1])
+            if lhs is None or rhs is None: return {'display': "Could not parse equation sides.", 'handwriting': "Parse Error"}
             expr = lhs - rhs
         else:
             clean = self.extract_func(query, ["solve", "equation", "for", "x", "zeros", "roots"])
             expr = self.parse_input(clean)
             
-        if not expr: return "Could not parse equation."
+        if expr is None: return {'display': "Could not parse equation.", 'handwriting': "Parse Error"}
         
         solution = solve(expr, self.x)
-        return f"Solution for {pretty(expr)} = 0:\n\n{pretty(solution)}"
+        display = f"Solution for {expr} = 0:\n\n{solution}"
+        handwriting = f"Solution for {expr} = 0:\n\n{solution}"
+        handwriting = handwriting.replace("**", "^")
+        return {'display': display, 'handwriting': handwriting}
 
     def handle_simplify(self, query):
         clean = self.extract_func(query, ["simplify", "evaluate", "calc"])
@@ -150,12 +217,17 @@ class ScientificSolver:
             # Maybe it's a matrix? "[[1,2],[3,4]]"
             try:
                 mat = Matrix(eval(clean)) # risky eval but local usage
-                return f"Matrix:\n{pretty(mat)}\n\nDeterminant: {mat.det()}\nInverse:\n{pretty(mat.inv() if mat.det() != 0 else 'Singular')}"
+                display = f"Matrix:\n{pretty(mat)}\n\nDeterminant: {mat.det()}\nInverse:\n{pretty(mat.inv() if mat.det() != 0 else 'Singular')}"
+                handwriting = f"Matrix Analysis:\nDet: {mat.det()}"
+                return {'display': display, 'handwriting': handwriting}
             except:
-                return "Could not understand expression."
+                return {'display': "Could not understand expression.", 'handwriting': "Error"}
         
         res = simplify(expr)
-        return f"Simplified form of {pretty(expr)}:\n\n= {pretty(res)}"
+        display = f"Simplified form of {expr}:\n\n= {res}"
+        handwriting = f"Simplified {expr}:\n\n= {res}"
+        handwriting = handwriting.replace("**", "^")
+        return {'display': display, 'handwriting': handwriting}
 
 if __name__ == "__main__":
     solver = ScientificSolver()
